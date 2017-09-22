@@ -111,9 +111,9 @@ const char* helptext=
 "        changefiles in one run. This ability increases merging speed.\n"
 "        Unfortunately, every changefile consumes about 200 MB of main\n"
 "        memory while being processed. For this reason, the number of\n"
-"        parallely processable changefiles is limited.\n"
+"        parallelly processable changefiles is limited.\n"
 "        Use this commandline argument to determine the maximum number\n"
-"        of parallely processed changefiles. The default value is 7.\n"
+"        of parallelly processed changefiles. The default value is 7.\n"
 "\n"
 "-t=TEMPPATH\n"
 "--tempfiles=TEMPPATH\n"
@@ -511,7 +511,7 @@ static char global_osmconvert_arguments[2000]= "";
   // general command line arguments for osmconvert;
 #define max_number_of_changefiles_in_cache 100
 static int global_max_merge= 7;
-  // maximum number of parallely processed changefiles
+  // maximum number of parallelly processed changefiles
 static const char* global_gzip_parameters= "";
   // parameters for gzip compression
 static char global_base_url[400]=
@@ -1199,7 +1199,7 @@ return 0;
   continue;  // take next parameter
       }
     if(strzcmp(a,"--max-merge=")==0) {
-        // maximum number of parallely processed changefiles
+        // maximum number of parallelly processed changefiles
       global_max_merge= strtouint32(a+12);
       if(global_max_merge<2) {
         global_max_merge= 2;
