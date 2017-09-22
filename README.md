@@ -1,6 +1,6 @@
 A few really fast tools to convert, filter and update OpenStreetMap data files<br/>
 <br/>
-Current Version: 0.7<br/>
+Current Version: 0.8<br/>
 <br/>
 Programm desrcriptions:<br/>
 https://wiki.openstreetmap.org/wiki/osmconvert <br/>
