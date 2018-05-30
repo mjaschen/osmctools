@@ -1,10 +1,10 @@
-// osmupdate 2017-02-26 16:40
-#define VERSION "0.4.4"
+// osmupdate 2018-05-27 12:00
+#define VERSION "0.4.5"
 //
 // compile this file:
 // gcc osmupdate.c -o osmupdate
 //
-// (c) 2011..2017 Markus Weber, Nuernberg
+// (c) 2011..2018 Markus Weber, Nuernberg
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public License
@@ -165,7 +165,7 @@ const char* helptext=
 "loss. Do not use the program in productive or commercial systems.\n"
 "\n"
 "There is NO WARRANTY, to the extent permitted by law.\n"
-"Please send any bug reports to markus.weber@gmx.com\n\n";
+"Please send any bug reports to marqqs@gmx.eu\n\n";
 
 #define _FILE_OFFSET_BITS 64
 #include <inttypes.h>
@@ -515,7 +515,7 @@ static int global_max_merge= 7;
 static const char* global_gzip_parameters= "";
   // parameters for gzip compression
 static char global_base_url[400]=
-  "http://planet.openstreetmap.org/replication";
+  "https://planet.openstreetmap.org/replication";
 static char global_base_url_suffix[100]="";
   // for old replication URL, to get "day-replication" instead of "day"
 
@@ -1280,6 +1280,8 @@ return 0;
 return 1;
         }
       if(strcmp(a,"--complete-ways")==0 ||
+          strcmp(a,"--complete-multipolygons")==0 ||
+          strcmp(a,"--complete-boundaries")==0 ||
           strcmp(a,"--complex-ways")==0 ||
           strcmp(a,"--drop-brokenrefs")==0 ||
           strcmp(a,"--drop-broken-refs")==0) {
