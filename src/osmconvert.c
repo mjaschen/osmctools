@@ -1,10 +1,10 @@
-// osmconvert 2017-03-30 19:00
-#define VERSION "0.8.7"
+// osmconvert 2018-05-27 12:00
+#define VERSION "0.8.10"
 //
 // compile this file:
 // gcc osmconvert.c -lz -O3 -o osmconvert
 //
-// (c) 2011..2017 Markus Weber, Nuernberg
+// (c) 2011..2018 Markus Weber, Nuernberg
 // Richard Russo contributed the initiative to --add-bbox-tags option
 //
 // This program is free software; you can redistribute it and/or
@@ -29,7 +29,8 @@ const char* shorthelptext=
 "-b=<x1>,<y1>,<x2>,<y2>    apply a border box\n"
 "-B=<border_polygon>       apply a border polygon\n"
 "--complete-ways           do not clip ways at the borders\n"
-"--complex-ways            do not clip multipolygons at the borders\n"
+"--complete-multipolygons  do not clip multipolygons at the borders\n"
+"--complete-boundaries     do not clip boundaries at the borders\n"
 "--all-to-nodes            convert ways and relations to nodes\n"
 "--add-bbox-tags           add bbox tags to ways and relations\n"
 "--add-bboxarea-tags       add tags for estimated bbox areas\n"
@@ -121,9 +122,9 @@ const char* helptext=
 "        from standard input. It is recommended to use .o5m format as\n"
 "        input format to compensate most of the speed disadvantage.\n"
 "\n"
-"--complex-ways\n"
-"        Same as before, but multipolygons will not be cut at the\n"
-"        borders too.\n"
+"--complete-multipolygons, --complete-boundaries\n"
+"        Same as before, but multipolygons resp. boundaries will not\n"
+"        be cut at the borders too.\n"
 "\n"
 "--all-to-nodes\n"
 "        Some applications do not have the ability to process ways or\n"
@@ -386,15 +387,15 @@ const char* helptext=
 "Tuning\n"
 "\n"
 "To speed-up the process, the program uses some main memory for a\n"
-"hash table. By default, it uses 900 MB for storing a flag for every\n"
-"possible node, 90 for the way flags, and 10 relation flags.\n"
-"Every byte holds the flags for 8 ID numbers, i.e., in 900 MB the\n"
-"program can store 7200 million flags. As there are less than 3200\n"
-"million IDs for nodes at present (Oct 2014), 400 MB would suffice.\n"
-"So, for example, you can decrease the hash sizes to e.g. 400, 50 and\n"
+"hash table. By default, it uses 1200 MB for storing a flag for every\n"
+"possible node, 150 for the way flags, and 10 relation flags.\n"
+"Every byte holds the flags for 8 ID numbers, i.e., in 1200 MB the\n"
+"program can store 9600 million flags. As there are less than 5700\n"
+"million IDs for nodes at present (May 2018), 720 MB would suffice.\n"
+"So, for example, you can decrease the hash sizes to e.g. 720, 80 and\n"
 "2 MB using this option:\n"
 "\n"
-"  --hash-memory=400-50-2\n"
+"  --hash-memory=720-80-2\n"
 "\n"
 "But keep in mind that the OSM database is continuously expanding. For\n"
 "this reason the program-own default value is higher than shown in the\n"
@@ -455,7 +456,7 @@ const char* helptext=
 "loss. Do not use the program in productive or commercial systems.\n"
 "\n"
 "There is NO WARRANTY, to the extent permitted by law.\n"
-"Please send any bug reports to markus.weber@gmx.com\n\n";
+"Please send any bug reports to marqqs@gmx.eu\n\n";
 
 #define _FILE_OFFSET_BITS 64
 #include <zlib.h>
@@ -597,8 +598,14 @@ static char global_csvseparator[16]= "\t";  // separator for csv
 static bool global_completeways= false;  // when applying borders,
   // do not clip ways but include them as whole if at least a single
   // of its nodes lies inside the borders;
-static bool global_complexways= false;  // same as global_completeways,
+static bool global_complex= false;  // one of the following complex
+  // operations has been invoked:
+  // --complete-multipolygons, --complete-boundaries
+static bool global_completemp= false;  // same as global_completeways,
   // but multipolygons are included completely (with all ways and their
+  // nodes), even when only a single nodes lies inside the borders;
+static bool global_completeboundaries= false;  // same as global_completeways,
+  // but boundaries are included completely (with all ways and their
   // nodes), even when only a single nodes lies inside the borders;
 static int global_calccoords= 0;
   // calculate coordinates for all objects;
@@ -1614,7 +1621,7 @@ static int hash_ini(int n,int w,int r) {
     return 0;  // ignore the call of this procedure
   // check parameters and store the values
   #define D(x,o) if(x<1) x= 1; else if(x>4000) x= 4000; \
-    hash__max[o]= x*(1024*1024);
+    hash__max[o]= x*(1024u*1024u);
   D(n,0u) D(w,1u) D(r,2u)
   #undef D
   // allocate memory for each hash table
@@ -2427,11 +2434,11 @@ return 0;
 static inline bool read_setjump() {
   // store the current position in the file as a destination
   // for a jump which will follow later;
-  // if global_complexways is false, the call will be ignored;
+  // if global_complex is false, the call will be ignored;
   // the position is not stored anew if it has been locked
   // with read_infop->lockpos;
   // return: jump position has been stored;
-  if(!global_complexways)
+  if(!global_complex)
 return false;
   if(read__jumplock)
 return false;
@@ -7330,9 +7337,10 @@ return;
 
 // this module provides procedures to use a temporary file for
 // storing a list of ways which have to be marked as 'inside';
-// this is used if option --complex-ways is invoked;
+// this is used if one or both options --complete-multipolygons
+// or --complete-boundaries is invoked;
 // as usual, all identifiers of a module have the same prefix,
-// in this case 'posi'; an underline will follow for a global
+// in this case 'cww'; an underline will follow for a global
 // accessible identifier, two underlines if the identifier
 // is not meant to be accessed from outside this module;
 // the sections of private and public definitions are separated
@@ -10240,13 +10248,14 @@ return 1;
 
 int dependencystage;
   // stage of the processing of interobject dependencies:
-  // interrelation dependencies, --complete-ways or --complex-ways;
+  // interrelation dependencies, --complete-ways,
+  // --complete-multipolygons or --complete-boundaries;
   // processing in stages allows us to reprocess parts of the data;
   // abbrevation "ht" means hash table (module hash_);
   //
   // 0: no recursive processing at all;
   //
-  // option --complex-ways:
+  // option --complete-multipolygons:
   // 11:     no output;
   //         for each node which is inside the borders,
   //           set flag in ht;
@@ -10443,7 +10452,7 @@ return 5;
       // (borders to apply AND relations are required) OR
       // user wants ways and relations to be converted to nodes
     // initiate recursive processing;
-    if(global_complexways) {
+    if(global_complex) {
       oo__dependencystage(11);
         // 11:     no output;
         //         for each node which is inside the borders,
@@ -10483,7 +10492,9 @@ return 28;
   else {
     oo__dependencystage(0);  // no recursive processing
     global_completeways= false;
-    global_complexways= false;
+    global_complex= false;
+    global_completemp= false;
+    global_completeboundaries= false;
     }
 
   // print file timestamp and nothing else if requested
@@ -11241,6 +11252,7 @@ return 23;
           bool relinside;  // this relation lies inside
           bool wayinside;  // at least one way lies inside
           bool ismp;  // this relation is a multipolygon
+                      // or a boundary
 
           relinside= wayinside= ismp= false;
           refidp= refid; reftypep= reftype; refrolep= refrole;
@@ -11251,7 +11263,7 @@ return 23;
             if(!wayinside && rt==1 && (strcmp(rr,"outer")==0 ||
                 strcmp(rr,"inner")==0) && hash_geti(1,ri))
                 // referenced object is a way and part of
-                // a multipolygon AND lies inside
+                // a multipolygon (or boundary) AND lies inside
               wayinside= true;
             refidp++; reftypep++; refrolep++;
             }  // end   for every referenced object
@@ -11260,27 +11272,30 @@ return 23;
             if(wayinside) {  // at least one way lies inside
               keyp= key; valp= val;
               while(keyp<keye) {  // for all key/val pairs of this object
-                if(strcmp(*keyp,"type")==0 &&
-                    strcmp(*valp,"multipolygon")==0) {
-                  ismp= true;
+                if(strcmp(*keyp,"type")==0) {
+                  if(global_completemp &&
+                        strcmp(*valp,"multipolygon")==0 ||
+                      global_completeboundaries &&
+                        strcmp(*valp,"boundary")==0)
+                    ismp= true;
               break;
                   }
                 keyp++; valp++;
                 }  // for all key/val pairs of this object
-              if(ismp) {  // is multipolygon
+              if(ismp) {  // is multipolygon or boundary
                 refidp= refid; reftypep= reftype; refrolep= refrole;
                 while(refidp<refide) {  // for every referenced object
                   ri= *refidp; rt= *reftypep; rr= *refrolep;
                   if(rt==1 && (strcmp(rr,"outer")==0 ||
                       strcmp(rr,"inner")==0) &&
                       !hash_geti(1,ri)) {  // referenced object
-                      // is a way and part of the multipolygon AND
-                      // has not yet a flag in ht
+                      // is a way and part of the multipolygon resp.
+                      // boundary AND has not yet a flag in ht
                     cww_ref(ri);  // write id of the way
                     }
                   refidp++; reftypep++; refrolep++;
                   }  // end   for every referenced object
-                }  // is multipolygon
+                }  // is multipolygon or boundary
               }  // at least one way lies inside
             }  // relation lies inside
           }  // relation
@@ -11508,8 +11523,8 @@ return 26;
           keyp= key; valp= val;
           while(keyp<keye) {  // for all key/val pairs of this object
             if(modi_CHECK(otype,*keyp,*valp)) {
-              if(modi_check_add) wo_node_keyval(*keyp++,*valp++);
-              else keyp++; valp++;
+              if(modi_check_add) wo_node_keyval(*keyp,*valp);
+              keyp++; valp++;
               wo_node_keyval(modi_check_key,modi_check_val);
               }
             else
@@ -11651,8 +11666,8 @@ return 26;
                 while(keyp<keye) {
                     // for all key/val pairs of this object
                   if(modi_CHECK(otype,*keyp,*valp)) {
-                    if(modi_check_add) wo_node_keyval(*keyp++,*valp++);
-                    else keyp++; valp++;
+                    if(modi_check_add) wo_node_keyval(*keyp,*valp);
+                    keyp++; valp++;
                     wo_node_keyval(modi_check_key,modi_check_val);
                     }
                   else
@@ -11676,8 +11691,8 @@ return 26;
               while(keyp<keye) {
                   // for all key/val pairs of this object
                 if(modi_CHECK(otype,*keyp,*valp)) {
-                  if(modi_check_add) wo_wayrel_keyval(*keyp++,*valp++);
-                  else keyp++; valp++;
+                  if(modi_check_add) wo_wayrel_keyval(*keyp,*valp);
+                  keyp++; valp++;
                   wo_wayrel_keyval(modi_check_key,modi_check_val);
                   }
                 else
@@ -11699,8 +11714,8 @@ return 26;
             while(keyp<keye) {
                 // for all key/val pairs of this object
               if(modi_CHECK(otype,*keyp,*valp)) {
-                if(modi_check_add) wo_wayrel_keyval(*keyp++,*valp++);
-                else keyp++; valp++;
+                if(modi_check_add) wo_wayrel_keyval(*keyp,*valp);
+                keyp++; valp++;
                 wo_wayrel_keyval(modi_check_key,modi_check_val);
                 }
               else
@@ -11823,8 +11838,8 @@ return 26;
               while(keyp<keye) {
                   // for all key/val pairs of this object
                 if(modi_CHECK(otype,*keyp,*valp)) {
-                  if(modi_check_add) wo_node_keyval(*keyp++,*valp++);
-                  else keyp++; valp++;
+                  if(modi_check_add) wo_node_keyval(*keyp,*valp);
+                  keyp++; valp++;
                   wo_node_keyval(modi_check_key,modi_check_val);
                   }
                 else
@@ -11882,8 +11897,8 @@ return 26;
             while(keyp<keye) {
                 // for all key/val pairs of this object
               if(modi_CHECK(otype,*keyp,*valp)) {
-                if(modi_check_add) wo_wayrel_keyval(*keyp++,*valp++);
-                else keyp++; valp++;
+                if(modi_check_add) wo_wayrel_keyval(*keyp,*valp);
+                keyp++; valp++;
                 wo_wayrel_keyval(modi_check_key,modi_check_val);
                 }
               else
@@ -12536,7 +12551,7 @@ return true;
     if(function_cut_mode==1)
       argv[argc++]= "--complete-ways";
     if(function_cut_mode==2)
-      argv[argc++]= "--complex-ways";
+      argv[argc++]= "--complete-multipolygons";
     if(function_only_statistics)
       argv[argc++]= "--out-statistics";
     else if(function_statistics)
@@ -12896,9 +12911,18 @@ return 0;
       global_completeways= true;
   continue;  // take next parameter
       }
-    if(strcmp(a,"--complex-ways")==0) {
-        // do not clip multipolygons when applying borders
-      global_complexways= true;
+    if(strcmp(a,"--complete-multipolygons")==0 ||
+        strcmp(a,"--complex-ways")==0) {
+        // do not clip multipolygons when applying borders;
+        // the term "--complex-ways" is deprecated but still supported;
+      global_complex= true;
+      global_completemp= true;
+  continue;  // take next parameter
+      }
+    if(strcmp(a,"--complete-boundaries")==0) {
+        // do not clip boundaries when applying borders
+      global_complex= true;
+      global_completeboundaries= true;
   continue;  // take next parameter
       }
     if(strcmp(a,"--all-to-nodes")==0) {
@@ -13072,11 +13096,16 @@ return 2;
     PERR("cannot apply --complete-ways when reading standard input.")
 return 2;
     }
-  if(usesstdin && global_complexways) {
-    PERR("cannot apply --complex-ways when reading standard input.")
+  if(usesstdin && global_completemp) {
+    PERR("cannot apply --complete-multipolygons when reading"
+      " standard input.")
 return 2;
     }
-  if(global_completeways || global_complexways) {
+  if(usesstdin && global_completeboundaries) {
+    PERR("cannot apply --complete-boundaries when reading standard input.")
+return 2;
+    }
+  if(global_completeways || global_complex) {
     uint32_t zlibflags;
     zlibflags= zlibCompileFlags();
     if(loglevel>=2) {
@@ -13116,7 +13145,9 @@ return 3;
         "-b=, -B=, --drop-brokenrefs must not be combined with --diff");
 return 6;
       }
-    if(h_n==0) h_n= 1000;  // use standard value if not set otherwise
+    if(h_n==0) { // use standard values if not set otherwise
+      h_n= 1200; h_w= 150; h_r= 10;
+      }
     if(h_w==0 && h_r==0) {
         // user chose simple form for hash memory value
       // take the one given value as reference and determine the 
