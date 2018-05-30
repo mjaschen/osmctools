@@ -1,10 +1,10 @@
-// osmfilter 2017-09-22 14:00
-#define VERSION "1.4.3"
+// osmfilter 2018-05-27 12:00
+#define VERSION "1.4.4"
 //
 // compile this file:
 // gcc osmfilter.c -O3 -o osmfilter
 //
-// (c) 2011..2017 Markus Weber, Nuernberg
+// (c) 2011..2018 Markus Weber, Nuernberg
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public License
@@ -324,15 +324,15 @@ const char* helptext=
 "Tuning\n"
 "\n"
 "To speed-up the process, the program uses some main memory for a\n"
-"hash table. By default, it uses 900 MB for storing a flag for every\n"
-"possible node, 90 for the way flags, and 10 relation flags.\n"
-"Every byte holds the flags for 8 ID numbers, i.e., in 900 MB the\n"
-"program can store 7200 million flags. As there are less than 3200\n"
-"million IDs for nodes at present (Oct 2014), 400 MB would suffice.\n"
-"So, for example, you can decrease the hash sizes to e.g. 400, 50 and\n"
-"2 MB (for relations, 2 flags are needed each) using this option:\n"
+"hash table. By default, it uses 1200 MB for storing a flag for every\n"
+"possible node, 150 for the way flags, and 10 relation flags.\n"
+"Every byte holds the flags for 8 ID numbers, i.e., in 1200 MB the\n"
+"program can store 9600 million flags. As there are less than 5700\n"
+"million IDs for nodes at present (May 2018), 720 MB would suffice.\n"
+"So, for example, you can decrease the hash sizes to e.g. 720, 80 and\n"
+"2 MB using this option:\n"
 "\n"
-"  --hash-memory=400-50-2\n"
+"  --hash-memory=720-80-2\n"
 "\n"
 "But keep in mind that the OSM database is continuously expanding. For\n"
 "this reason the program-own default value is higher than shown in the\n"
@@ -370,7 +370,7 @@ const char* helptext=
 "1000, the length of each key or val is limited to 100.\n"
 "\n"
 "There is NO WARRANTY, to the extent permitted by law.\n"
-"Please send any bug reports to markus.weber@gmx.com\n\n";
+"Please send any bug reports to marqqs@gmx.eu\n\n";
 
 #define _FILE_OFFSET_BITS 64
 #include <inttypes.h>
@@ -892,7 +892,7 @@ static int hash_ini(int n,int w,int r) {
     return 0;  // ignore the call of this procedure
   // check parameters and store the values
   #define D(x,o) if(x<1) x= 1; else if(x>4000) x= 4000; \
-    hash__max[o]= x*(1024*1024);
+    hash__max[o]= x*(1024u*1024u);
   D(n,0) D(w,1) D(r,2) D(r,3)
   #undef D
   // allocate memory for each hash table
@@ -6967,7 +6967,9 @@ return 3;
   if(global_recursive) {
     int r;
 
-    if(h_n==0) h_n= 1000;  // use standard value if not set otherwise
+    if(h_n==0) { // use standard values if not set otherwise
+      h_n= 1200; h_w= 150; h_r= 10;
+      }
     if(h_w==0 && h_r==0) {
         // user chose simple form for hash memory value
       // take the one given value as reference and determine the 
@@ -7017,3 +7019,4 @@ return 5;
     }  // verbose mode
   return r;
   }  // end   main()
+
