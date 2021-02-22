@@ -719,7 +719,7 @@ exit(1);
     if(loglevel<2)
       unlink(newest_timestamp_file_name);
   #endif
-  if(result[0]=='#') {  // full status information
+  // if(result[0]=='#') {  // full status information
     // get sequence number
     char* sequence_number_p;
     sequence_number_p= strstr(result,"sequenceNumber=");
@@ -737,7 +737,7 @@ exit(1);
       memcpy(result+13,timestamp_p+14,3);
       memcpy(result+16,timestamp_p+18,4);
       }  // found timestamp line
-    }  // full status information
+  //  }  // full status information
   changefile_timestamp= strtimetosint64(result);
   if(loglevel>0) {  // verbose mode
     char ts[30];
@@ -825,7 +825,7 @@ static int64_t get_changefile_timestamp(
     }  // could open the file
 
   // parse the timestamp information
-  if(timestamp_contents[0]=='#') {  // full status information
+  // if(timestamp_contents[0]=='#') {  // full status information
     // get timestamp
     char* timestamp_p;
     timestamp_p= strstr(timestamp_contents,"timestamp=");
@@ -839,7 +839,7 @@ static int64_t get_changefile_timestamp(
       memcpy(timestamp_contents+13,timestamp_p+14,3);
       memcpy(timestamp_contents+16,timestamp_p+18,4);
       }  // found timestamp line
-    }  // full status information
+  //  }  // full status information
   changefile_timestamp= strtimetosint64(timestamp_contents);
 
   if(loglevel>0) {  // verbose mode
