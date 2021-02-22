@@ -18,7 +18,7 @@
 //
 // Other licenses are available on request; please ask the author.
 
-#define MAXLOGLEVEL 3
+#define MAXLOGLEVEL 2
 const char* helptext=
 "\nosmupdate " VERSION "\n"
 "\n"
@@ -184,7 +184,7 @@ typedef enum {false= 0,true= 1} bool;
 typedef uint8_t byte;
 typedef unsigned int uint;
 #define isdig(x) isdigit((unsigned char)(x))
-static int loglevel= 3;  // logging to stderr;
+static int loglevel= 0;  // logging to stderr;
   // 0: no logging; 1: small logging; 2: normal logging;
   // 3: extended logging;
 #define DP(f) fprintf(stderr,"Debug: " #f "\n");
